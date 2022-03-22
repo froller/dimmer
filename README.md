@@ -25,3 +25,15 @@ To set desired level of output tie corresponding pin to ground for at least 20 m
 
 **NOTE**: Pins 1-3 and 7 have internal pull-up resistors enabled. So these pins will source current when tied to ground.
 
+Development Tools
+-----------------
+
+### Hardware
+
+* [AVRISP mkII](https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-42093-AVR-ISP-mkII_UserGuide.pdf) - AVR programmer and debugger
+
+### Software
+
+* [avra](https://github.com/Ro5bert/avra) - AVR assembler
+* [AVRDUDE](https://github.com/avrdudes/avrdude/) - AVR flashing software
+
