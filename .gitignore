@@ -1,0 +1,9 @@
+*.cof
+*.hex
+*.lst
+*.map
+*.obj
+
+*.kdev4
+.kdev4/*
+
