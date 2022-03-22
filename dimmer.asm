@@ -55,19 +55,19 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 
 LOOP:
 B0:		in	r16, PINB
-		andi	r16, (1 << PORTB2)
+		andi	r16, (1 << PORTB3)	; Pin 2
 		brne	B1
 		ldi	r20, 0x40
 		rjmp	B3
 
 B1:		in	r16, PINB
-		andi	r16, (1 << PORTB3)
+		andi	r16, (1 << PORTB4)	; Pin 3
 		brne	B2
 		ldi	r20, 0x80
 		rjmp	B3
 
 B2:		in	r16, PINB
-		andi	r16, (1 << PORTB4)
+		andi	r16, (1 << PORTB2)	; Pin 7
 		brne	B3
 		ldi	r20, 0xFF
 
@@ -86,7 +86,7 @@ TIMER:		in	r17, PORTB	; Read PORTB for special cases
 		in	r16, OCR0A	; Read current OCR0A value
 		cp	r16, r20	; Compare OCR0A with R20
 		breq	WRITE		; They are equal, nothing left to do
-		brlt	INCREASE
+		brlo	INCREASE	; brlo (unsigned) instead of brlt (signed)
 DECREASE:	dec	r16		; Decrease OCR0A
 		rjmp	WRITE
 INCREASE:	inc	r16		; Increase OCR0A
