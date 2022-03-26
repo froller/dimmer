@@ -49,8 +49,8 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 		mov	r20, r16
 		ldi	r16, (1 << TOIE0)	; Enable timer interrupt
 		out	TIMSK0, r16
+		;ldi	r16, (0 << WGM02) | (1 << CS02) | (0 << CS01) | (0 << CS00) ; 1/256 CLK for 146 Hz PWM @ 9.6 MHz CLK
 		ldi	r16, (0 << WGM02) | (0 << CS02) | (1 << CS01) | (1 << CS00) ; 1/64 CLK for 586 Hz PWM @ 9.6 MHz CLK
-		ldi	r16, (0 << WGM02) | (1 << CS02) | (0 << CS01) | (0 << CS00) ; 1/256 CLK for 146 Hz PWM @ 9.6 MHz CLK
 		out	TCCR0B, r16
 
 LOOP:
@@ -82,14 +82,19 @@ WATCHDOG:	in	r21, PORTB
 		out	PORTB, r21
 		reti
 
-TIMER:		in	r17, PORTB	; Read PORTB for special cases
+TIMER:		inc	r23		; Used for divider by 4
+		mov	r24, r23
+		andi	r24, 0xFC
+		in	r17, PORTB	; Read PORTB for special cases
 		in	r16, OCR0A	; Read current OCR0A value
 		cp	r16, r20	; Compare OCR0A with R20
 		breq	WRITE		; They are equal, nothing left to do
 		brlo	INCREASE	; brlo (unsigned) instead of brlt (signed)
-DECREASE:	dec	r16		; Decrease OCR0A
+DECREASE:	cpse	r23, r24	; Divider by 4
+		dec	r16		; Decrease OCR0A
 		rjmp	WRITE
-INCREASE:	inc	r16		; Increase OCR0A
+INCREASE:	cpse	r23, r24	; Divider by 4
+		inc	r16		; Increase OCR0A
 WRITE:		out	OCR0A, r16	; Write OCR0A
 		cpi	r16, 0x00	; Special case ZERO
 		breq	SET_ZERO
