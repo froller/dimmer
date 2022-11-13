@@ -1,5 +1,8 @@
 #include "tn13def.inc"
 
+#define PIN_HALF PORTB3
+#define PIN_FULL PORTB4
+
 .CSEG
 		rjmp	RESET		; Reset Handler
 		reti			; IRQ0 Handler
@@ -12,8 +15,6 @@
 		rjmp	WATCHDOG	; Watchdog Interrupt Handler
 		reti			; ADC Conversion Handler
 
-
-
 .CSEG
 		
 RESET:		ldi	r16, low(RAMEND)	; Main program start
@@ -22,8 +23,6 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 		; Set up pins
 		ldi	r16, 0b00000011 ; Set PORTB[1:0] for output
 		out	DDRB, r16
-		ldi	r16, 0b00011100	; Enable pull-up on PORTB[4:2]
-		out	PORTB, r16
 
 		; Set up CLK prescaler
 		ldi	r16, (1 << CLKPCE)
@@ -53,35 +52,40 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 		ldi	r16, (0 << WGM02) | (0 << CS02) | (1 << CS01) | (1 << CS00) ; 1/64 CLK for 586 Hz PWM @ 9.6 MHz CLK
 		out	TCCR0B, r16
 
+;
+; Main loop
+;
 LOOP:
-B0:		in	r16, PINB
-		andi	r16, (1 << PORTB3)	; Pin 2
-		brne	B1
-		ldi	r20, 0x40
-		rjmp	B3
-
-B1:		in	r16, PINB
-		andi	r16, (1 << PORTB4)	; Pin 3
-		brne	B2
-		ldi	r20, 0x80
-		rjmp	B3
-
-B2:		in	r16, PINB
-		andi	r16, (1 << PORTB2)	; Pin 7
-		brne	B3
+		ldi	r20, 0x01
+; Handling HALF brightness
+		in	r16, PINB
+		andi	r16, (1 << PIN_HALF)	; Pin 2
+		breq	SKIP_CH1
+		ldi	r20, 0x7F
+SKIP_CH1:
+; Handling FULL brightness
+		in	r16, PINB
+		andi	r16, (1 << PIN_FULL)	; Pin 3
+		breq	SKIP_CH2
 		ldi	r20, 0xFF
-
-B3:		sei
+SKIP_CH2:
+		sei
 		sleep
 		cli
 		rjmp LOOP
 
+;
+; Watchdog interrupt handler
+;
 WATCHDOG:	in	r21, PORTB
 		ldi	r22, (1 << PORTB1)
 		eor	r21, r22
 		out	PORTB, r21
 		reti
 
+;
+; Timer0 interrupt handler
+; 
 TIMER:		inc	r23		; Used for divider by 4
 		mov	r24, r23
 		andi	r24, 0xFC
