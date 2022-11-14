@@ -3,6 +3,17 @@
 #define PIN_HALF PORTB3
 #define PIN_FULL PORTB4
 
+; Delays in 2 sec units
+#define FADEOUT_DELAY 15
+#define BLACKOUT_DELAY 250
+
+; Fixed PWM values
+#define PWM_OFF 0x01
+#define PWM_HALF 0x7F
+#define PWM_FULL 0xFF
+
+#define DEBUG
+
 .CSEG
 		rjmp	RESET		; Reset Handler
 		reti			; IRQ0 Handler
@@ -15,14 +26,27 @@
 		rjmp	WATCHDOG	; Watchdog Interrupt Handler
 		reti			; ADC Conversion Handler
 
+; r18	no PWM timer settings
+; r19	fast PWM timer settings
+; r20	desired PWM value
+; r21	black-out delay counter
+; r22	fade-out delay counter
+; r23	slow transition counter
+		
 .CSEG
 		
 RESET:		ldi	r16, low(RAMEND)	; Main program start
 		out	SPL, r16		; Set Stack Pointer to top of RAM
 
 		; Set up pins
-		ldi	r16, 0b00000011 ; Set PORTB[1:0] for output
+#ifdef DEBUG		
+		ldi	r16, 0b00000011	; Set PORTB[1:0] for output
+#else
+		ldi	r16, 0b00000001	; Set PORTB[1:0] for output
+#endif
 		out	DDRB, r16
+		ldi	r16, (1 << PIN_HALF) | (1 << PIN_FULL)	; Enable pull-up on PORTB[4:3]
+		out	PORTB, r16
 
 		; Set up CLK prescaler
 		ldi	r16, (1 << CLKPCE)
@@ -35,7 +59,7 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 		ori	r16, (1 << WDCE)
 		out	WDTCR, r16
 		; 4 clock cycles to set WDT
-		ldi	r16, (1 << WDTIE) | (1 << WDP2) | (1 << WDP0)	; 0.5 s
+		ldi	r16, (1 << WDTIE) | (1 << WDP2) | (1 << WDP1) | (1 << WDP0)	; ~ 1 s
 		out	WDTCR, r16
 		wdr
 
@@ -52,23 +76,36 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 		ldi	r16, (0 << WGM02) | (0 << CS02) | (1 << CS01) | (1 << CS00) ; 1/64 CLK for 586 Hz PWM @ 9.6 MHz CLK
 		out	TCCR0B, r16
 
+		ldi	r21, 0
+		ldi     r22, 0
 ;
 ; Main loop
 ;
 LOOP:
-		ldi	r20, 0x01
+		ldi	r20, PWM_OFF
 ; Handling HALF brightness
 		in	r16, PINB
 		andi	r16, (1 << PIN_HALF)	; Pin 2
-		breq	SKIP_CH1
-		ldi	r20, 0x7F
+		breq	SKIP_CH1 
+		ldi	r20, PWM_HALF
+		ldi	r21, BLACKOUT_DELAY
 SKIP_CH1:
 ; Handling FULL brightness
 		in	r16, PINB
 		andi	r16, (1 << PIN_FULL)	; Pin 3
 		breq	SKIP_CH2
-		ldi	r20, 0xFF
+		ldi	r20, PWM_FULL
+		ldi	r21, BLACKOUT_DELAY
+		ldi	r22, FADEOUT_DELAY
 SKIP_CH2:
+		tst	r21
+		breq	SKIP_BLACKOUT
+		ldi	r20, PWM_HALF
+SKIP_BLACKOUT:		
+		tst	r22
+		breq	SKIP_FADEOUT
+		ldi	r20, PWM_FULL
+SKIP_FADEOUT:
 		sei
 		sleep
 		cli
@@ -77,16 +114,41 @@ SKIP_CH2:
 ;
 ; Watchdog interrupt handler
 ;
-WATCHDOG:	in	r21, PORTB
-		ldi	r22, (1 << PORTB1)
-		eor	r21, r22
-		out	PORTB, r21
+WATCHDOG:
+; Delay befor fading out
+#ifdef DEBUG
+		in	r16, PORTB
+		andi	r16, ~(1 << PORTB1)
+#endif
+		tst	r21
+		breq	END_OF_FADEOUT_DELAY
+		dec     r21
+#ifdef DEBUG
+		ori	r16, (1 << PORTB1)
+#endif
+
+END_OF_FADEOUT_DELAY:
+
+; Delay befor blacking out
+		tst	r22
+		breq	END_OF_BLACKOUT_DELAY
+		dec	r22
+#ifdef DEBUG
+		ori	r16, (1 << PORTB1)
+#endif
+		
+END_OF_BLACKOUT_DELAY:
+#ifdef DEBUG
+		out	PORTB, r16
+#endif
 		reti
 
 ;
 ; Timer0 interrupt handler
 ; 
-TIMER:		inc	r23		; Used for divider by 4
+TIMER:
+		push	r16
+		inc	r23		; Used for divider by 4
 		mov	r24, r23
 		andi	r24, 0xFC
 		in	r17, PORTB	; Read PORTB for special cases
@@ -105,12 +167,14 @@ WRITE:		out	OCR0A, r16	; Write OCR0A
 		cpi	r16, 0xFF	; Special case FULL
 		breq	SET_FULL
 		out	TCCR0A, r19	; Start fast PWM
+		pop	r16
 		reti
 SET_ZERO:	andi	r17, ~(1 << PORTB0)
 		rjmp	SET_OUT
 SET_FULL:	ori	r17, (1 << PORTB0)
 SET_OUT:	out	TCCR0A, r18	; Stop fast PWM
 		out	PORTB, r17
+		pop	r16
 		reti
 		
 
