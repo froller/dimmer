@@ -3,16 +3,22 @@
 #define PIN_HALF PORTB3
 #define PIN_FULL PORTB4
 
-; Delays in 2 sec units
+; Internal pull-up resistors
+#define PULL_UP 0
+
+; Time quantization in ms
+#define TIME_UNIT 2000
+
+; Delays in TIME_UNIT's
 #define FADEOUT_DELAY 15
-#define BLACKOUT_DELAY 250
+#define BLACKOUT_DELAY 150
 
 ; Fixed PWM values
-#define PWM_OFF 0x01
+#define PWM_OFF 0x00
 #define PWM_HALF 0x7F
 #define PWM_FULL 0xFF
 
-#define DEBUG
+;#define DEBUG
 
 .CSEG
 		rjmp	RESET		; Reset Handler
@@ -45,8 +51,11 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 		ldi	r16, 0b00000001	; Set PORTB[1:0] for output
 #endif
 		out	DDRB, r16
+
+#if PULL_UP==1
 		ldi	r16, (1 << PIN_HALF) | (1 << PIN_FULL)	; Enable pull-up on PORTB[4:3]
 		out	PORTB, r16
+#endif
 
 		; Set up CLK prescaler
 		ldi	r16, (1 << CLKPCE)
@@ -59,7 +68,13 @@ RESET:		ldi	r16, low(RAMEND)	; Main program start
 		ori	r16, (1 << WDCE)
 		out	WDTCR, r16
 		; 4 clock cycles to set WDT
-		ldi	r16, (1 << WDTIE) | (1 << WDP2) | (1 << WDP1) | (1 << WDP0)	; ~ 1 s
+#if TIME_UNIT==2000
+		ldi	r16, (1 << WDTIE) | (1 << WDP2) | (1 << WDP1) | (1 << WDP0)	; ~2s
+#elif TIME_UNIT=500
+		ldi	r16, (1 << WDTIE) | (1 << WDP2) | (0 << WDP1) | (1 << WDP0)	; ~0.5s
+#else
+		ldi	r16, (1 << WDTIE) | (1 << WDP2) | (1 << WDP1) | (0 << WDP0)	; ~1s
+#endif
 		out	WDTCR, r16
 		wdr
 
